@@ -1,10 +1,3 @@
 {
-    "cmake.configureOnOpen": false,
-    "python.autoComplete.extraPaths": [
-        "/opt/ros/noetic/lib/python3/dist-packages"
-    ],
-    "python.analysis.extraPaths": [
-        "/opt/ros/noetic/lib/python3/dist-packages"
-    ],
-    "cmake.sourceDirectory": "${workspaceFolder}/src/test_node"
+"isGitignoreExtActive": true,
 }

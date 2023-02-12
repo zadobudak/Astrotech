@@ -1,0 +1,7 @@
+
+/build
+/devel
+/logs
+/.catkin_tools/profiles/default/packages
+/.catkin_tools/profiles/default/build.yaml
+.catkin_tools/profiles/default/devel_collisions.txt
