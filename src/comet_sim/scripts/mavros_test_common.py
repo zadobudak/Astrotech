@@ -5,10 +5,9 @@ import unittest
 import rospy
 import math
 from geometry_msgs.msg import PoseStamped
-from mavros_msgs.msg import Altitude, ExtendedState, HomePosition, ParamValue, State, \
-                            WaypointList
-from mavros_msgs.srv import CommandBool, ParamGet, ParamSet, SetMode, SetModeRequest, WaypointClear, \
-                            WaypointPush
+from mavros_msgs.msg import Altitude, ExtendedState, HomePosition, ParamValue, State, WaypointList
+from mavros_msgs.srv import CommandBool, CommandTOL, CommandTOLRequest, ParamGet, ParamSet, SetMode, SetModeRequest, WaypointClear, \
+    WaypointPush
 from pymavlink import mavutil
 from sensor_msgs.msg import NavSatFix, Imu
 
@@ -51,8 +50,12 @@ class MavrosTestCommon(unittest.TestCase):
             self.fail("failed to connect to services")
         self.get_param_srv = rospy.ServiceProxy('mavros/param/get', ParamGet)
         self.set_param_srv = rospy.ServiceProxy('mavros/param/set', ParamSet)
-        self.set_arming_srv = rospy.ServiceProxy('mavros/cmd/arming',
-                                                 CommandBool)
+        self.set_arming_srv = rospy.ServiceProxy(
+            'mavros/cmd/arming', CommandBool)
+        self.set_takeoff_srv = rospy.ServiceProxy(
+            'mavros/cmd/takeoff', CommandTOL)  # added by zafer to try takeoff
+        # added by zafer to try land
+        self.set_land_srv = rospy.ServiceProxy("mavros/cmd/land", CommandTOL)
         self.set_mode_srv = rospy.ServiceProxy('mavros/set_mode', SetMode)
         self.wp_clear_srv = rospy.ServiceProxy('mavros/mission/clear',
                                                WaypointClear)
@@ -69,8 +72,8 @@ class MavrosTestCommon(unittest.TestCase):
                                                NavSatFix,
                                                self.global_position_callback)
         self.imu_data_sub = rospy.Subscriber('mavros/imu/data',
-                                               Imu,
-                                               self.imu_data_callback)
+                                             Imu,
+                                             self.imu_data_callback)
         self.home_pos_sub = rospy.Subscriber('mavros/home_position/home',
                                              HomePosition,
                                              self.home_position_callback)
@@ -205,6 +208,89 @@ class MavrosTestCommon(unittest.TestCase):
             "failed to set arm | new arm: {0}, old arm: {1} | timeout(seconds): {2}".
             format(arm, old_arm, timeout)))
 
+    # Takeoff command written by zafer for fixed wing
+    # This command send longitude and latitude as expected but altitude and pitch commands are not recognized by px4
+    # with set_param("MIS_TAKEOFF_ALT", 50) and set_param("FW_PSP_OFF", 0.174) we can set the altitude and pitch
+    # but this is not a good solution. We need to find a way to send the altitude and pitch commands to px4
+    # also yaw parameter is obselete on fixed wing (I guess)
+    def set_takeoff(self, altitude=50, latitude=0, longitude=0, min_pitch=10, yaw=0, timeout=30):
+        rospy.wait_for_service('/mavros/cmd/takeoff')
+
+        # fix for px4 firmware use with caution.
+        self.set_param("MIS_TAKEOFF_ALT", ParamValue(0, altitude), 3)
+        self.set_param("FW_TKO_PITCH_MIN", ParamValue(0, min_pitch), 3)
+
+        request = CommandTOLRequest(
+            min_pitch, yaw, latitude, longitude, altitude)
+        rospy.loginfo("setting FCU takeoff altitude: {0} latitude: {1} longitude {2} \n \
+                       pitch: {3}  yaw: {4}".format(altitude, latitude, longitude, min_pitch, yaw))
+        loop_freq = 1  # Hz
+        rate = rospy.Rate(loop_freq)
+        takeoff_set = False
+        for i in range(timeout * loop_freq):
+            if self.state.mode == "AUTO.TAKEOFF":
+                takeoff_set = True
+                rospy.loginfo("set takeoff success | seconds: {0} of {1}".format(
+                    i / loop_freq, timeout))
+                break
+            else:
+                try:
+                    res = self.set_takeoff_srv(request)
+                    if not res.success:
+                        rospy.logerr("failed to send takeoff command")
+                except rospy.ServiceException as e:
+                    rospy.logerr(e)
+
+            try:
+                rate.sleep()
+            except rospy.ROSException as e:
+                self.fail(e)
+        self.assertTrue(takeoff_set, (
+            "failed to set takeoff | timeout(seconds): {0}".format(timeout)))
+    def set_land(self, latitude=0, longitude=0, altitude=0, yaw=0, min_pitch=0, mode="HOME", timeout=30):
+        rospy.wait_for_service('/mavros/cmd/land')
+        if mode == "HOME":
+            # latitude = self.home_position.geo.latitude
+            longitude = self.home_position.geo.longitude
+            altitude = self.home_position.geo.altitude
+            # yaw = self.home_position.approach.
+        elif mode == "CURRENT":
+            # latitude = self.global_position.latitude
+            longitude = self.global_position.longitude
+            altitude = self.global_position.altitude
+            # yaw = self.global_position.yaw
+        else: # mode == "CUSTOM"
+            pass
+
+
+
+        request= CommandTOLRequest(
+            min_pitch, yaw, latitude, longitude, altitude)
+        rospy.loginfo("setting FCU land altitude: {0} latitude: {1} longitude {2} \n \
+                          pitch: {3}  yaw: {4}".format(altitude, latitude, longitude, min_pitch, yaw))
+        loop_freq = 1  # Hz
+        rate = rospy.Rate(loop_freq)
+        land_set = False
+        for i in range(timeout * loop_freq):
+            if self.state.mode == "AUTO.LAND":
+                land_set = True
+                rospy.loginfo("set land success | seconds: {0} of {1}".format(
+                    i / loop_freq, timeout))
+                break
+            else:
+                try:
+                    res = self.set_land_srv(request)
+                    if not res.success:
+                        rospy.logerr("failed to send land command")
+                except rospy.ServiceException as e:
+                    rospy.logerr(e)
+
+            try:
+                rate.sleep()
+            except rospy.ROSException as e:
+                self.fail(e)
+        self.assertTrue(land_set, (
+            "failed to set land | timeout(seconds): {0}".format(timeout)))
     def set_mode(self, mode, timeout):
         """mode: PX4 mode string, timeout(int): seconds"""
         rospy.loginfo("setting FCU mode: {0}".format(mode))
@@ -242,7 +328,7 @@ class MavrosTestCommon(unittest.TestCase):
         else:
             value = param_value.real
         rospy.loginfo("setting PX4 parameter: {0} with value {1}".
-        format(param_id, value))
+                      format(param_id, value))
         loop_freq = 1  # Hz
         rate = rospy.Rate(loop_freq)
         param_set = False
@@ -251,7 +337,7 @@ class MavrosTestCommon(unittest.TestCase):
                 res = self.set_param_srv(param_id, param_value)
                 if res.success:
                     rospy.loginfo("param {0} set to {1} | seconds: {2} of {3}".
-                    format(param_id, value, i / loop_freq, timeout))
+                                  format(param_id, value, i / loop_freq, timeout))
                 break
             except rospy.ServiceException as e:
                 rospy.logerr(e)
@@ -313,7 +399,7 @@ class MavrosTestCommon(unittest.TestCase):
             format(mavutil.mavlink.enums['MAV_LANDED_STATE'][
                 desired_landed_state].name, mavutil.mavlink.enums[
                     'MAV_LANDED_STATE'][self.extended_state.landed_state].name,
-                   index, timeout)))
+                index, timeout)))
 
     def wait_for_vtol_state(self, transition, timeout, index):
         """Wait for VTOL transition, timeout(int): seconds"""
@@ -408,7 +494,7 @@ class MavrosTestCommon(unittest.TestCase):
         self.assertTrue((
             wps_sent and wps_verified
         ), "mission could not be transferred and verified | timeout(seconds): {0}".
-                        format(timeout))
+            format(timeout))
 
     def wait_for_mav_type(self, timeout):
         """Wait for MAV_TYPE parameter, timeout(int): seconds"""

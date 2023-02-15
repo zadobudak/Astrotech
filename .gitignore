@@ -5,3 +5,4 @@
 /.catkin_tools/profiles/default/packages
 /.catkin_tools/profiles/default/build.yaml
 .catkin_tools/profiles/default/devel_collisions.txt
+src/comet_sim/scripts/__pycache__/mavros_test_common.cpython-38.pyc
