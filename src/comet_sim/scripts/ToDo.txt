@@ -1,3 +1,6 @@
-create the mode selection node (done almost)
+create the mode selection node (done almost) done only need to adjust node names 
+create the takeoff and land commands (done)
 make the takeoff and land commands work from mode select 
 put position and attitude control nodes together. 
+
+create a image processing node that will take in the image and output the position of uav in image. 

@@ -16,6 +16,7 @@ class ModeSelect:
         self.pub_hz = 10
         self.pub_rate = rospy.Rate(self.pub_hz)  # 10hz rate of mode publishing
         self.mode = String("None")
+        rospy.loginfo("Mode select node initialized")
 
     def mode_select(self):
         while not rospy.is_shutdown():
@@ -46,7 +47,7 @@ class ModeSelect:
 
 if __name__ == '__main__':
     modeselect = ModeSelect()
-    modeselect.__init__()
+    # modeselect.__init__()
     modeselect.start_pub_thread()
     try:
         modeselect.mode_select()
