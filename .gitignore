@@ -6,3 +6,13 @@
 /.catkin_tools/profiles/default/build.yaml
 .catkin_tools/profiles/default/devel_collisions.txt
 src/comet_sim/scripts/__pycache__/mavros_test_common.cpython-38.pyc
+src/image_prcs/scripts/requirements.txt
+src/image_prcs/scripts/__pycache__/DetectionClass.cpython-38.pyc
+src/image_prcs/scripts/__pycache__/net.cpython-38.pyc
+src/image_prcs/scripts/__pycache__/run_SiamRPN.cpython-38.pyc
+src/image_prcs/scripts/__pycache__/utils.cpython-38.pyc
+src/image_prcs/scripts/» Talon Pro, Mini Drak & Mini Goose chase action.mkv
+src/image_prcs/scripts/last version.mp4
+src/image_prcs/scripts/Misty FPV Close Proximity Chase.mp4
+src/image_prcs/scripts/output.avi
+.catkin_tools/profiles/default/devel_collisions.txt
