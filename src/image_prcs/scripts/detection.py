@@ -4,21 +4,13 @@
 
 
 import rospy
-import time
-import glob
 import cv2
-import torch
-from cv2 import rectangle
 import numpy as np
-from os.path import realpath, dirname, join
 import time
 
 import threading  # for threading
 
 # modules for tracking model
-from net import SiamRPNvot
-from run_SiamRPN import SiamRPN_init, SiamRPN_track
-from utils import get_axis_aligned_bbox, cxy_wh_2_rect, im_to_numpy, area, in_locking_rect, large_enough, fsm
 
 from sensor_msgs.msg import Image
 from shape_msgs.msg import Plane

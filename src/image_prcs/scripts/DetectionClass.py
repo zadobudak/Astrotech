@@ -43,7 +43,8 @@ class Detector:
         self.tracking_net.load_state_dict(torch.load(
             self.real_path_name("SiamRPNVOT.model"), map_location=self.device))
         self.tracking_net.eval().to(self.device)
-
+        
+        
 
 
         rospy.loginfo("detection model loaded")
@@ -96,21 +97,21 @@ class Detector:
         #TODO threading code for detection
     # threading code for detection
         
-        thread = Thread(target=self.detection, args=(10, 0.7, 0.35)) 
+        thread = Thread(target=self.detection, args=(5, 0.7, 0.35)) 
         thread.daemon = True
         thread.start()
 
 
 
 
-    def detection(self, frame_per_detection: int = 10,confThreshold: float = 0.7, nmsThreshold: float = .35):
+    def detection(self, frame_per_detection: int = 5,confThreshold: float = 0.7, nmsThreshold: float = .35):
 
         tic = cv2.getTickCount()
         fps = rospy.Rate(30)
         
         while not rospy.is_shutdown():
             try:
-                # rospy.wait_for_message("talon/usb_cam/image_raw", Image, timeout=1)
+                rospy.wait_for_message("talon/usb_cam/image_raw", Image, timeout=1)
                 im = self.cv_image
                 isLocked = False
                 # Get frames
@@ -120,15 +121,17 @@ class Detector:
                 print(duration_tic)
                 im_x, im_y = im.shape[1], im.shape[0]
                 # print("Current Frame is:{}".format(cnt))
-                tic_detection = cv2.getTickCount()
+
 
                 # number frame to skip detectionq
-                if self.cnt % frame_per_detection == 0 or not self.detection_initiated or not self.object_detected:
-                    detection_initiated = True
+                if self.cnt % frame_per_detection == 0 or not self.Tracker_is_initilized :
+                    tic_detection = cv2.getTickCount()
+                    self.detection_initiated = True
                     # Object Detection
                     (class_ids, scores, bboxes) = self.detection_model.detect(
                         im, confThreshold, nmsThreshold)
                     bboxes = list(bboxes)
+
 
                     if len(bboxes) > 1:
                         bboxes.sort(key=area)
@@ -139,7 +142,7 @@ class Detector:
                         1 / ((toc_detection - tic_detection) / cv2.getTickFrequency())))
 
                     for class_id, score, bbox in zip(class_ids, scores, bboxes):
-                        object_detected = True
+                        self.object_detected = True
                         isLocked = True
                         (x, y, w, h) = bbox
                         self.rect = [x, y, x + w, y + h]
@@ -158,6 +161,7 @@ class Detector:
                         self.Tracker_is_initilized = True
 
                 elif self.Tracker_is_initilized:
+                    tic_tracking = cv2.getTickCount()
                     # Track obejct
                     state = SiamRPN_track(self.tracker, im, self.device)
                     isLocked = True
@@ -170,10 +174,13 @@ class Detector:
                     res = [int(l) for l in res]
                     self.rect = [res[0], res[1], res[0] + res[2], res[1] + res[3]]
                     # cv2.rectangle(im, (res[0], res[1]), (res[0] + res[2], res[1] + res[3]), (0, 255, 255), 3)
-                    if state['score'] < 0.7:
+                    if state['score'] < 0.5:
                         self.Tracker_is_initilized = False
-                        self.object_detected = False
-                        isLocked = False
+                        # self.object_detected = False
+                        # isLocked = False
+                    toc_tracking = cv2.getTickCount()
+                    print("Tracking FPS: {}".format(
+                        1 / ((toc_tracking - tic_tracking) / cv2.getTickFrequency())))
 
                 toc = cv2.getTickCount()
                 isLocked_server = isLocked and large_enough(
@@ -225,8 +232,8 @@ class Detector:
                     print("Hedef_genislik: {}".format(self.rect[2] - self.rect[0]))
                     print("Hedef_yukseklik: {}".format(
                         self.rect[3] - self.rect[1]))
-                # if not isLocked_server:
-                if not isLocked_server:
+                else:
+                
                     if not self.locking_timestamps == [0, 0]:
                         self.locking_timestamps[1] = duration_tic #type: ignore
                         """

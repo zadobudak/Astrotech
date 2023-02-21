@@ -9,7 +9,7 @@ import numpy as np
 
 def fsm(input_state,states):
     states = [input_state, states[0], states[1], states[2], states[3]]
-    if input_state:
+    if not input_state:
         if states == [False, False, False, False, False]:
             input_state = False
     else:
