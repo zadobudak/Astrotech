@@ -20,7 +20,7 @@ class ModeSelect:
 
     def mode_select(self):
         while not rospy.is_shutdown():
-            modes= ["attctl", "posctl", "takeoff", "land", "loiter", "rtl", "offboard"]
+            modes= ["attctl", "posctl", "takeoff", "land", "loiter", "rtl", "offboard", "disarm", "arm"]
             mode = input("Enter mode: ").strip()  # strip whitespace
 
             if mode not in modes:

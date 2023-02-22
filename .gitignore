@@ -16,3 +16,4 @@ src/image_prcs/scripts/last version.mp4
 src/image_prcs/scripts/Misty FPV Close Proximity Chase.mp4
 src/image_prcs/scripts/output.avi
 .catkin_tools/profiles/default/devel_collisions.txt
+src/comet_sim/scripts/__pycache__/mavros_test_common.cpython-38.pyc

@@ -2,7 +2,7 @@
 from mavros_msgs.msg import ParamValue, AttitudeTarget
 from tf.transformations import quaternion_from_euler
 from threading import Thread
-from std_msgs.msg import Header
+from std_msgs.msg import Header, String
 from pymavlink import mavutil
 from mavros_test_common import MavrosTestCommon
 from geometry_msgs.msg import PoseStamped, Quaternion, Vector3
@@ -15,7 +15,7 @@ class MavrosOffboard(MavrosTestCommon):
 
     def setUp(self):
         super(MavrosOffboard, self).setUp()
-
+        self.mode_sub = rospy.Subscriber("mode_select", String, self.get_mode)
         self.att_setpoint_sub = rospy.Subscriber(
             "att_setpoint", AttitudeTarget, self.get_att)  # no callback for this yet
         self.pos_setpoint_sub = rospy.Subscriber(
@@ -26,14 +26,13 @@ class MavrosOffboard(MavrosTestCommon):
 
         self.pos_setpoint_pub = rospy.Publisher(
             'mavros/setpoint_position/local', PoseStamped, queue_size=1)
-
         # send setpoints in seperate thread to better prevent failsafe
         # self.pos_thread = Thread(target=self.send_pos, args=())
         # self.pos_thread.daemon = True
         # self.pos_thread.start()
 
         self.att = AttitudeTarget()
-
+        self.mode = String("disarm")
         self.att_setpoint_pub = rospy.Publisher(
             'mavros/setpoint_raw/attitude', AttitudeTarget, queue_size=1)
 
@@ -44,7 +43,6 @@ class MavrosOffboard(MavrosTestCommon):
     def tearDown(self):
         super(MavrosOffboard, self).tearDown()
 
-
     """not sure if there is a better solution for callbacks"""
 
     def get_att(self, msg: AttitudeTarget):
@@ -52,6 +50,32 @@ class MavrosOffboard(MavrosTestCommon):
 
     def get_pos(self, msg: PoseStamped):
         self.pos = msg
+
+    def get_mode(self, mode_msg: String):
+        self.mode_old = self.mode
+        self.mode = mode_msg
+
+        if self.mode_old != self.mode:
+            rospy.loginfo("Mode changed to: %s", self.mode.data)
+
+            try:
+                self.att_thread.join(1)
+                self.pos_thread.join(1)
+            except:
+                pass
+
+            if self.mode.data == "attctl":
+                self.start_att_thread()
+            elif self.mode.data == "posctl":
+                self.start_pos_thread()
+            elif self.mode.data == "takeoff":
+                self.cmd_takeoff()
+            elif self.mode.data == "land":
+                self.cmd_land()
+            elif self.mode.data == "disarm":
+                self.cmd_arm(False)
+            elif self.mode.data == "arm":
+                self.cmd_arm(True)
 
     def start_att_thread(self):
         self.att_thread = Thread(target=self.send_att, args=())
@@ -65,8 +89,8 @@ class MavrosOffboard(MavrosTestCommon):
         rospy.loginfo("pos_thread" + str(rospy.Time.now()))
         self.pos_thread.start()
 
-    
-   # POSCTL 
+   # POSCTL
+
     def send_pos(self):
         rate = rospy.Rate(10)  # Hz
         self.pos.header = Header()
@@ -176,9 +200,9 @@ class MavrosOffboard(MavrosTestCommon):
         self.set_mode("OFFBOARD", 5)
 
         rospy.loginfo("run mission")
-        # positions = ( (50, 50, 20), (50, -50, 20), (-50, -50, 20),
-        #              (0, 0, 20))
-        positions = ((50, 50, 50), (50, -50, 20))
+        positions = ( (50, 50, 20), (50, -50, 20), (-50, -50, 20),
+                     (0, 0, 20))
+        # positions = ((50, 50, 50), (50, -50, 20))
 
         for i in range(len(positions)):
             self.reach_position(positions[i][0], positions[i][1],
@@ -244,22 +268,23 @@ class MavrosOffboard(MavrosTestCommon):
                                    90, 0)
         self.set_arm(False, 5)
 
-        def cmd_takeoff(self, alt, lat, lon, min_pitch=15):
-            """Takeoff to a specified altitude"""
-            """TODO make the takeoff relative to the curent position"""
-            self.set_takeoff(min_pitch=min_pitch, altitude=alt,
-                             latitude=lat, longitude=lon)
+    def cmd_takeoff(self, alt=50, lat=0, lon=0, min_pitch=15):
+        """Takeoff to a specified altitude"""
+        """TODO make the takeoff relative to the curent position"""
+        self.set_takeoff(min_pitch=min_pitch, altitude=alt,
+                         latitude=lat, longitude=lon)
 
-        def cmd_land(self, mode="CURRENT", lat=0, lon=0):
-            """Land"""
-            # diffrenct modes for landing are possible
-            # change the mode parameter CURRENT, HOME, CUSTOM
-            # uses gps coordinates for custom mode
-            self.set_land(mode=mode, latitude=lat, longitude=lon)
+    def cmd_land(self, mode="CURRENT", lat=0, lon=0):
+        """Land but does not work right now lands the vehicle ut we
+          need to specify rally point before landing otherwise it goes nuts"""
+        # diffrenct modes for landing are possible
+        # change the mode parameter CURRENT, HOME, CUSTOM
+        # uses gps coordinates for custom mode
+        self.set_land(mode=mode, latitude=lat, longitude=lon)
 
-        def cmd_arm(self, arm=True):
-            """Arm or disarm"""
-            self.set_arm(arm, 5)
+    def cmd_arm(self, arm=True):
+        """Arm or disarm"""
+        self.set_arm(arm, 5)
 
 
 if __name__ == '__main__':
@@ -267,7 +292,7 @@ if __name__ == '__main__':
 
     mavrosOffboard = MavrosOffboard()
     mavrosOffboard.setUp()
-    mavrosOffboard.start_att_thread()
-    mavrosOffboard.test_attctl()
+    mavrosOffboard.start_pos_thread()
+    mavrosOffboard.test_posctl()
     while not rospy.is_shutdown():
         rospy.spin()

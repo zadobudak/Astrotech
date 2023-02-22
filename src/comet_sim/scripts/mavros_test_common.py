@@ -247,24 +247,23 @@ class MavrosTestCommon(unittest.TestCase):
                 self.fail(e)
         self.assertTrue(takeoff_set, (
             "failed to set takeoff | timeout(seconds): {0}".format(timeout)))
+
     def set_land(self, latitude=0, longitude=0, altitude=0, yaw=0, min_pitch=0, mode="HOME", timeout=30):
         rospy.wait_for_service('/mavros/cmd/land')
         if mode == "HOME":
-            # latitude = self.home_position.geo.latitude
+            latitude = self.home_position.geo.latitude
             longitude = self.home_position.geo.longitude
-            altitude = self.home_position.geo.altitude
+            # altitude = self.home_position.geo.altitude
             # yaw = self.home_position.approach.
         elif mode == "CURRENT":
-            # latitude = self.global_position.latitude
+            latitude = self.global_position.latitude
             longitude = self.global_position.longitude
-            altitude = self.global_position.altitude
+            # altitude = self.global_position.altitude
             # yaw = self.global_position.yaw
-        else: # mode == "CUSTOM"
+        else:  # mode == "CUSTOM"
             pass
 
-
-
-        request= CommandTOLRequest(
+        request = CommandTOLRequest(
             min_pitch, yaw, latitude, longitude, altitude)
         rospy.loginfo("setting FCU land altitude: {0} latitude: {1} longitude {2} \n \
                           pitch: {3}  yaw: {4}".format(altitude, latitude, longitude, min_pitch, yaw))
@@ -291,6 +290,7 @@ class MavrosTestCommon(unittest.TestCase):
                 self.fail(e)
         self.assertTrue(land_set, (
             "failed to set land | timeout(seconds): {0}".format(timeout)))
+
     def set_mode(self, mode, timeout):
         """mode: PX4 mode string, timeout(int): seconds"""
         rospy.loginfo("setting FCU mode: {0}".format(mode))
