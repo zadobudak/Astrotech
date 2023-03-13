@@ -322,6 +322,7 @@ class MavrosTestCommon(unittest.TestCase):
             format(mode, old_mode, timeout)))
 
     def set_param(self, param_id, param_value, timeout):
+        res = self.get_param_srv(param_id)
         """param: PX4 param string, ParamValue, timeout(int): seconds"""
         if param_value.integer != 0:
             value = param_value.integer
@@ -347,7 +348,7 @@ class MavrosTestCommon(unittest.TestCase):
             except rospy.ROSException as e:
                 self.fail(e)
 
-        self.assertTrue(res.success, (
+        self.assertTrue(res.success, ( 
             "failed to set param | param_id: {0}, param_value: {1} | timeout(seconds): {2}".
             format(param_id, value, timeout)))
 
@@ -476,7 +477,7 @@ class MavrosTestCommon(unittest.TestCase):
                 except rospy.ServiceException as e:
                     rospy.logerr(e)
             else:
-                if len(waypoints) == len(self.mission_wp.waypoints):
+                if len(waypoints) == len(self.mission_wp.waypoints ): #type: ignore
                     rospy.loginfo("number of waypoints transferred: {0}".
                                   format(len(waypoints)))
                     wps_verified = True
@@ -520,7 +521,7 @@ class MavrosTestCommon(unittest.TestCase):
             except rospy.ROSException as e:
                 self.fail(e)
 
-        self.assertTrue(res.success, (
+        self.assertTrue(res.success, ( #type: ignore
             "MAV_TYPE param get failed | timeout(seconds): {0}".format(timeout)
         ))
 

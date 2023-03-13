@@ -25,6 +25,7 @@ from cv_bridge import CvBridge, CvBridgeError
 from threading import Thread
 import copy
 
+
 class Detector:
 
     def __init__(self):
@@ -43,9 +44,6 @@ class Detector:
         self.tracking_net.load_state_dict(torch.load(
             self.real_path_name("SiamRPNVOT.model"), map_location=self.device))
         self.tracking_net.eval().to(self.device)
-        
-        
-
 
         rospy.loginfo("detection model loaded")
 
@@ -84,36 +82,40 @@ class Detector:
         self.cnt = 0  # frame counter
         self.detection_initiated = False  # False until the first detection, then True
         self.object_detected = False
+        self.Tracker_is_initilized = False  # False until the first detection, then True
         self.rect = [0, 0, 0, 0]  # bounding box of the object
         # timestamps of the locking and unlocking of the object
         self.locking_timestamps = [0, 0]
         self.start_time = time.time()  # start time of the iteration
-        self.cv_image : np.ndarray
+        self.cv_image: np.ndarray
+
     def real_path_name(self, name):
         return join(realpath(dirname(__file__)), name)
 
-    
-    def start_detection_thread(self):
-        #TODO threading code for detection
-    # threading code for detection
+    def start_detection_thread(self, frame_per_detection: int = 5, confThreshold: float = 0.7, nmsThreshold: float = .35):
+        # threading code for detection
+
+        self.detection_thread = Thread(target=self.detection, args=(frame_per_detection, confThreshold, nmsThreshold))
+        self.detection_thread.daemon = True
+        self.detection_thread.start()
         
-        thread = Thread(target=self.detection, args=(5, 0.7, 0.35)) 
-        thread.daemon = True
-        thread.start()
+    
+    def stop_detection_thread(self):
+        
+        self.detection_thread.join()
 
-
-
-
-    def detection(self, frame_per_detection: int = 5,confThreshold: float = 0.7, nmsThreshold: float = .35):
+    def detection(self, frame_per_detection: int = 5, confThreshold: float = 0.7, nmsThreshold: float = .35):
 
         tic = cv2.getTickCount()
         fps = rospy.Rate(30)
-        
+        self.detecting = True
+
         while not rospy.is_shutdown():
             try:
-                rospy.wait_for_message("talon/usb_cam/image_raw", Image, timeout=1)
+                rospy.wait_for_message(
+                    "talon/usb_cam/image_raw", Image, timeout=1)
                 im = self.cv_image
-                isLocked = False
+                self.isLocked = False
                 # Get frames
                 self.cnt += 1  # frame counter for detection
 
@@ -122,16 +124,14 @@ class Detector:
                 im_x, im_y = im.shape[1], im.shape[0]
                 # print("Current Frame is:{}".format(cnt))
 
-
                 # number frame to skip detectionq
-                if self.cnt % frame_per_detection == 0 or not self.Tracker_is_initilized :
+                if self.cnt % frame_per_detection == 0 or not self.Tracker_is_initilized:
                     tic_detection = cv2.getTickCount()
                     self.detection_initiated = True
                     # Object Detection
                     (class_ids, scores, bboxes) = self.detection_model.detect(
                         im, confThreshold, nmsThreshold)
                     bboxes = list(bboxes)
-
 
                     if len(bboxes) > 1:
                         bboxes.sort(key=area)
@@ -143,7 +143,7 @@ class Detector:
 
                     for class_id, score, bbox in zip(class_ids, scores, bboxes):
                         self.object_detected = True
-                        isLocked = True
+                        self.isLocked = True
                         (x, y, w, h) = bbox
                         self.rect = [x, y, x + w, y + h]
                         # cv2.rectangle(im, (x, y), (x + w, y + h), (0,0,255), 3)
@@ -164,7 +164,7 @@ class Detector:
                     tic_tracking = cv2.getTickCount()
                     # Track obejct
                     state = SiamRPN_track(self.tracker, im, self.device)
-                    isLocked = True
+                    self.isLocked = True
                     # Draw bbox
                     cv2.putText(im, "Tracking Score: {:.2f}".format(state['score']),
                                 (10, 30), cv2.FONT_HERSHEY_PLAIN, 2, (0, 255, 255), 1)
@@ -172,21 +172,22 @@ class Detector:
                     res = cxy_wh_2_rect(
                         state['target_pos'], state['target_sz'])
                     res = [int(l) for l in res]
-                    self.rect = [res[0], res[1], res[0] + res[2], res[1] + res[3]]
+                    self.rect = [res[0], res[1],
+                                 res[0] + res[2], res[1] + res[3]]
                     # cv2.rectangle(im, (res[0], res[1]), (res[0] + res[2], res[1] + res[3]), (0, 255, 255), 3)
                     if state['score'] < 0.5:
                         self.Tracker_is_initilized = False
                         # self.object_detected = False
-                        # isLocked = False
+                        # self.isLocked = False
                     toc_tracking = cv2.getTickCount()
                     print("Tracking FPS: {}".format(
                         1 / ((toc_tracking - tic_tracking) / cv2.getTickFrequency())))
 
                 toc = cv2.getTickCount()
-                isLocked_server = isLocked and large_enough(
+                self.isLocked_server = self.isLocked and large_enough(
                     self.rect[2] - self.rect[0], self.rect[3] - self.rect[1], im_x, im_y) and in_locking_rect(
                         self.rect, im_x, im_y)
-                # isLocked_server = isLocked
+                # self.isLocked_server = self.isLocked
 
                 # Display frame
 
@@ -194,12 +195,13 @@ class Detector:
                             (10, 70), cv2.FONT_HERSHEY_PLAIN, 2, (200, 0, 50), 2)
                 cv2.putText(im, "Frame: {}".format(self.cnt), (900, 40), cv2.FONT_HERSHEY_PLAIN,
                             3, (200, 0, 50), 2)
-                
+
                 tic = cv2.getTickCount()
-                isLocked_server, self.states = fsm(isLocked_server, self.states)
+                self.isLocked_server, self.states = fsm(
+                    self.isLocked_server, self.states)
                 print("states: ", self.states)
 
-                if isLocked:
+                if self.isLocked:
                     cv2.rectangle(im, (self.rect[0], self.rect[1]), (self.rect[2], self.rect[3]), (0, 0, 255),
                                   3)
                     cv2.putText(im, "Locked", (450, 40), cv2.FONT_HERSHEY_PLAIN, 3,
@@ -209,12 +211,14 @@ class Detector:
                 else:
                     cv2.putText(im, "NOTLocked", (450, 40), cv2.FONT_HERSHEY_PLAIN, 3,
                                 (5, 110, 5), 1)
-                # if isLocked_server:
-                if isLocked_server:
+                # if self.isLocked_server:
+                if self.isLocked_server:
                     if self.locking_timestamps == [0, 0]:
-                        self.locking_timestamps[0] = duration_tic    # type: ignore 
-                        print("Locking started at: ", self.locking_timestamps[0])
-     
+                        # type: ignore
+                        self.locking_timestamps[0] = duration_tic  # type: ignore                 
+                        print("Locking started at: ",
+                              self.locking_timestamps[0])
+
                     else:
                         cv2.putText(
                             im, "Locking time: {:.2f}".format(duration_tic -
@@ -229,13 +233,15 @@ class Detector:
                         (self.rect[0] + self.rect[2]) / 2))
                     print("Hedef_merkez_Y: {}".format(
                         (self.rect[1] + self.rect[3]) / 2))
-                    print("Hedef_genislik: {}".format(self.rect[2] - self.rect[0]))
+                    print("Hedef_genislik: {}".format(
+                        self.rect[2] - self.rect[0]))
                     print("Hedef_yukseklik: {}".format(
                         self.rect[3] - self.rect[1]))
                 else:
-                
+
                     if not self.locking_timestamps == [0, 0]:
-                        self.locking_timestamps[1] = duration_tic #type: ignore
+                        # type: ignore
+                        self.locking_timestamps[1] = duration_tic  # type: ignore                 
                         """
                         print("Locking finished")
                         print("Locking_duration: {}".format(locking_timestamps[1]-locking_timestamps[0]))
@@ -252,7 +258,6 @@ class Detector:
                             print("Locking_duration: {}".format(self.locking_timestamps[1] -
                                                                 self.locking_timestamps[0]))
                         self.locking_timestamps = [0, 0]
-
 
                 # exp
                 cv2.putText(im, "states: {}".format(self.states), (10, 180),
@@ -271,10 +276,9 @@ class Detector:
 
                 print("Frame: {}".format(self.cnt))
                 # print("------------")
-            
-                
-                if cv2.waitKey(1) & 0xFF == 27:
-                    break
+
+                if cv2.waitKey(1) & 0xFF == 27 or self.mode.data == "stop_tracking":  # type: ignore                 
+                   break
                 else:
                     fps.sleep()
 
