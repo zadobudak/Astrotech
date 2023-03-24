@@ -28,7 +28,7 @@ class RivalCoordinates:
             rospy.loginfo("The coordinates are %f, %f , %f , the publishing rate is %dhz", float(rivalposx) , float(rivalposy) , float(rivalposz) , self.pub_hz )
 
             self.AllCoordinates.append(self.pastcoordinates.data)
-            rospy.loginfo(self.AllCoordinates)
+            rospy.loginfo(self.AllCoordinates) #Display the position array
 
             self.input_rate.sleep()
 
