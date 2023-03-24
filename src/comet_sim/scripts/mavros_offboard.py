@@ -2,7 +2,7 @@
 from mavros_msgs.msg import ParamValue, AttitudeTarget
 from tf.transformations import quaternion_from_euler
 from threading import Thread
-from std_msgs.msg import Header, String
+from std_msgs.msg import Header, String, Float32MultiArray, MultiArrayDimension
 from pymavlink import mavutil
 from mavros_test_common import MavrosTestCommon
 from geometry_msgs.msg import PoseStamped, Quaternion, Vector3
@@ -16,6 +16,7 @@ class MavrosOffboard(MavrosTestCommon):
     def setUp(self):
         super(MavrosOffboard, self).setUp()
         self.mode_sub = rospy.Subscriber("mode_select", String, self.get_mode)
+        self.rivalpos_sub = rospy.Subscriber("setpoint_take", Float32MultiArray, self.get_rivalpos)
         self.att_setpoint_sub = rospy.Subscriber(
             "att_setpoint", AttitudeTarget, self.get_att)  # no callback for this yet
         self.pos_setpoint_sub = rospy.Subscriber(
@@ -33,6 +34,7 @@ class MavrosOffboard(MavrosTestCommon):
 
         self.att = AttitudeTarget()
         self.mode = String("disarm")
+        self.pastcoordinates = Float32MultiArray()
         self.att_setpoint_pub = rospy.Publisher(
             'mavros/setpoint_raw/attitude', AttitudeTarget, queue_size=1)
 
@@ -76,6 +78,18 @@ class MavrosOffboard(MavrosTestCommon):
                 self.cmd_arm(False)
             elif self.mode.data == "arm":
                 self.cmd_arm(True)
+    
+    def get_rivalpos(self, rivalpos_msg: Float32MultiArray):
+        self.rivalpos_old = self.pastcoordinates
+        self.pastcoordinates = rivalpos_msg
+        self.publishedpos = list()
+
+        if self.rivalpos_old.data != self.pastcoordinates.data:
+
+            if (len(self.pastcoordinates.data) != 0):
+                rospy.loginfo(self.pastcoordinates.data)
+                self.reach_position(self.pastcoordinates.data[0], self.pastcoordinates.data[1], self.pastcoordinates.data[2], 60)
+
 
     def start_att_thread(self):
         self.att_thread = Thread(target=self.send_att, args=())
@@ -214,6 +228,7 @@ class MavrosOffboard(MavrosTestCommon):
                                    45, 0)
         self.set_arm(False, 5)
 
+
     def test_attctl(self):
         """Test offboard attitude control"""
         # boundary to cross
@@ -292,7 +307,5 @@ if __name__ == '__main__':
 
     mavrosOffboard = MavrosOffboard()
     mavrosOffboard.setUp()
-    mavrosOffboard.start_pos_thread()
-    mavrosOffboard.test_posctl()
     while not rospy.is_shutdown():
         rospy.spin()
