@@ -48,7 +48,7 @@ class RivalCoordinates:
 
 if __name__ == '__main__':
     RivalAt = RivalCoordinates()
-    # modeselect.__init__()
+
     RivalAt.start_pub_thread()
     try:
         RivalAt.rival_pos_take()
