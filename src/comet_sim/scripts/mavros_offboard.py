@@ -70,6 +70,7 @@ class MavrosOffboard(MavrosTestCommon):
                 self.start_att_thread()
             elif self.mode.data == "posctl":
                 self.start_pos_thread()
+                self.set_mode("OFFBOARD", 5)
             elif self.mode.data == "takeoff":
                 self.cmd_takeoff()
             elif self.mode.data == "land":
@@ -85,6 +86,12 @@ class MavrosOffboard(MavrosTestCommon):
         self.publishedpos = list()
 
         if self.rivalpos_old.data != self.pastcoordinates.data:
+
+            try:
+                self.att_thread.join(1)
+                self.pos_thread.join(1)
+            except:
+                pass
 
             if (len(self.pastcoordinates.data) != 0):
                 rospy.loginfo(self.pastcoordinates.data)
